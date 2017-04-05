@@ -5,8 +5,16 @@ from itertools import product
 import numpy as np
 import pandas as pd
 from collections import namedtuple
+from random import choice
+from enum import Enum
 
 index = namedtuple("index", "phi, theta")
+
+class SplitType(Enum):
+    SplitByPhi = 0
+    SplitByTheta =  1
+
+MAX_RECURTION_DEPTH = 6
 
 def mat(theta, phi):
     return np.matrix([[np.cos(theta), np.sin(theta)*np.exp(-1j*phi)],
@@ -18,7 +26,7 @@ def normalized_dot_product(a,b):
 
 def is_close(a,b):
     #this is not well defined
-    return (a-b)/max([a,b]) < .5
+    return np.abs((a-b)/np.max([a,b])) < .8
 
 class Point:
     def __init__(self, index, delta_phi, delta_theta, mat):
@@ -38,10 +46,12 @@ class Point:
 
 
 class Vertex:
-    def __init__(self, points = None, sub_divide = True):
+    def __init__(self, points = None, sub_divide = True, split_type = None, level = 0):
         self.points = points
         self.n = len(points)
+        self.level = level
         self.sub_vertexes = None
+        self.split_type = choice([list(SplitType)])
         if sub_divide:
             self.sub_divide()
         else : 
@@ -49,24 +59,50 @@ class Vertex:
 
         
     def sub_divide(self):
+        if self.level >= MAX_RECURTION_DEPTH:
+            return 
         if self.n == 4 :
-            mat, delta_theta, delta_phi= self.points[0].mat, self.points[0].delta_theta, self.points[0].delta_phi
-            p1,p2,p3,p4 = self.points
-            #Drawing two rectangles using P1...P4:
-            # |P1 P5| |P5 P4|
-            # |P2 P6| |P6 P3|
-            p5_index = index(theta = p1.index.theta, 
-                             phi = p1.index.phi*2+1)
-            p6_index = index(theta = p2.index.theta, 
-                             phi = p2.index.phi*2+1)
-            p5 = Point(p5_index, delta_phi/2, delta_theta, mat)
-            p6 = Point(p5_index, delta_phi/2, delta_theta, mat)
-            self.sub_vertexes = [Vertex([p1,p2,p6,p5], sub_divide = False), Vertex([p5,p6,p3,p4], sub_divide = False)]
+            #Randomly splits the cell by Phi or Theta
+            if self.split_type == SplitType.SplitByPhi:
+                self.split_by_phi()
+            else: 
+                self.split_by_theta()
+
         elif self.n == 3:
             pass
         else :
             raise Exception("Vertex with n = {}".format(self.n))
 
+    def split_by_phi(self):
+        mat, delta_theta, delta_phi= self.points[0].mat, self.points[0].delta_theta, self.points[0].delta_phi
+        p1,p2,p3,p4 = self.points
+        #Drawing two rectangles using P1...P4:
+        # |P1 P5| |P5 P4|
+        # |P2 P6| |P6 P3|
+        p5_index = index(theta = p1.index.theta, 
+                         phi = p1.index.phi*2+1)
+        p6_index = index(theta = p2.index.theta, 
+                         phi = p2.index.phi*2+1)
+        p5 = Point(p5_index, delta_phi/2, delta_theta, mat)
+        p6 = Point(p5_index, delta_phi/2, delta_theta, mat)
+        self.sub_vertexes = [Vertex([p1,p2,p6,p5], sub_divide = False, split_type = SplitType.SplitByPhi, level = self.level+1),
+                             Vertex([p5,p6,p3,p4], sub_divide = False, split_type = SplitType.SplitByPhi, level = self.level+1)]
+
+    def split_by_theta(self):
+        mat, delta_theta, delta_phi= self.points[0].mat, self.points[0].delta_theta, self.points[0].delta_phi
+        p1,p2,p3,p4 = self.points
+        #Drawing two rectangles using P1...P4:
+        # |P1 P4| |P5 P6|
+        # |P5 P6| |P2 P3|
+        p5_index = index(theta = p1.index.theta*2+1, 
+                         phi = p1.index.phi)
+        p6_index = index(theta = p4.index.theta*2+1, 
+                         phi = p4.index.phi)
+        p5 = Point(p5_index, delta_phi, delta_theta/2, mat)
+        p6 = Point(p5_index, delta_phi, delta_theta/2, mat)
+        self.sub_vertexes = [Vertex([p1,p5,p6,p4], sub_divide = False, split_type = SplitType.SplitByTheta, level = self.level+1), 
+                            Vertex([p5,p2,p3,p6], sub_divide = False, split_type = SplitType.SplitByTheta, level = self.level+1)]
+        
     def calc(self, j):
         approximation = self.approximate(j)
         if self.sub_vertexes is not None:
@@ -77,6 +113,8 @@ class Vertex:
                 v1.sub_divide()
                 v2.sub_divide()
                 return v1.calc(j) + v2.calc(j)
+        else :
+            return approximation
 
     def approximate(self, j):
         res = 1
