@@ -14,7 +14,7 @@ class SplitType(Enum):
     SplitByPhi = 0
     SplitByTheta =  1
 
-MAX_RECURTION_DEPTH = 6
+MAX_RECURTION_DEPTH = 3
 
 def mat(theta, phi):
     return np.matrix([[np.cos(theta), np.sin(theta)*np.exp(-1j*phi)],
@@ -51,7 +51,7 @@ class Vertex:
         self.n = len(points)
         self.level = level
         self.sub_vertexes = None
-        self.split_type = choice([list(SplitType)])
+        self.split_type = choice(list(SplitType))
         if sub_divide:
             self.sub_divide()
         else : 
@@ -65,8 +65,10 @@ class Vertex:
             #Randomly splits the cell by Phi or Theta
             if self.split_type == SplitType.SplitByPhi:
                 self.split_by_phi()
-            else: 
+            elif self.split_type == SplitType.SplitByTheta:
                 self.split_by_theta()
+            else :
+                raise Exception("Unknown Split Type")
 
         elif self.n == 3:
             pass
@@ -195,8 +197,3 @@ class Sphere(dict):
     def chern_numbers(self):
         df = self.df
         return [int(np.round(df['F{}'.format(i)].sum()/(2*np.pi))) for i in range(self.length)]
-
-
-
-
-# 
